@@ -4,10 +4,17 @@ const startButton = document.getElementById('startButton');
 const restartButton = document.getElementById('restartButton');
 const menu = document.getElementById('menu');
 const timerDisplay = document.getElementById('timer');
+const timeValue = document.getElementById('timeValue');
 
-const COLORS = ['rgb(0, 0, 255)', 'rgb(139, 69, 19)', 'rgb(0, 128, 0)'];
-const HOLE_RADIUS = 50;
-const MOUSE_RADIUS = 40;
+const decreaseTimeBtn = document.getElementById('decreaseTime');
+const increaseTimeBtn = document.getElementById('increaseTime');
+const selectedTimeSpan = document.getElementById('selectedTime');
+
+const COLORS = ['#1E90FF', '#228B22', '#8B4513']; // Updated to vibrant blue, forest green, and saddle brown
+let HOLE_RADIUS = 50;
+let MOUSE_RADIUS = 40;
+const MOBILE_HOLE_RADIUS = 30;
+const MOBILE_MOUSE_RADIUS = 25;
 const TARGET_SCORES = [10, 15, 20, 25, 30];
 const LEVEL_CONFIG = [
     { holes: 9, spawnInterval: 1500, hideInterval: 1000 },
@@ -27,6 +34,24 @@ let mice = [];
 let spawnTimer;
 let timeLeft = 60;
 let timerInterval;
+
+let mouseSpeed = 2; // fixed speed
+let initialGameTime = 60;
+
+function initCanvas() {
+    if (window.innerWidth < 768) {
+        const maxWidth = Math.min(window.innerWidth - 20, 400);
+        canvas.width = maxWidth;
+        canvas.height = maxWidth;
+        HOLE_RADIUS = MOBILE_HOLE_RADIUS;
+        MOUSE_RADIUS = MOBILE_MOUSE_RADIUS;
+    } else {
+        canvas.width = 600;
+        canvas.height = 600;
+        HOLE_RADIUS = 50;
+        MOUSE_RADIUS = 40;
+    }
+}
 
 function initHoles() {
     holes = [];
@@ -99,7 +124,21 @@ function draw() {
     if (gameRunning) requestAnimationFrame(draw);
 }
 
+function updateSelectedTime(change) {
+    initialGameTime = Math.max(30, Math.min(120, initialGameTime + change));
+    selectedTimeSpan.textContent = initialGameTime;
+    timeValue.textContent = initialGameTime;
+    
+    // Update button states
+    decreaseTimeBtn.disabled = initialGameTime <= 30;
+    increaseTimeBtn.disabled = initialGameTime >= 120;
+}
+
+decreaseTimeBtn.addEventListener('click', () => updateSelectedTime(-30));
+increaseTimeBtn.addEventListener('click', () => updateSelectedTime(30));
+
 function startGame() {
+    initCanvas();
     score = 0;
     scoreElement.textContent = score;
     scoreDisplay.classList.remove('hidden');
@@ -111,7 +150,7 @@ function startGame() {
     level = 1;
     gameRunning = true;
     mice = [];
-    timeLeft = 60;
+    timeLeft = initialGameTime;
     initHoles();
     spawnTimer = setInterval(spawnMouse, LEVEL_CONFIG[0].spawnInterval);
     timerInterval = setInterval(updateTimer, 1000);
@@ -120,7 +159,7 @@ function startGame() {
 
 function updateTimer() {
     timeLeft--;
-    timerDisplay.textContent = `Time: ${timeLeft}s`;
+    timeValue.textContent = timeLeft;
     if (timeLeft <= 0) {
         gameOver();
     }
@@ -131,7 +170,7 @@ function resetGame() {
     clearInterval(timerInterval);
     gameRunning = false;
     mice = [];
-    timeLeft = 60;
+    timeLeft = initialGameTime;
     timerDisplay.textContent = `Time: ${timeLeft}s`;
     startButton.classList.remove('hidden');
     startButton.disabled = false;
@@ -173,6 +212,14 @@ function showWinScreen() {
     menu.classList.remove('hidden');
 }
 
+function updateScore() {
+    scoreElement.textContent = score;
+    scoreElement.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+        scoreElement.style.transform = 'scale(1)';
+    }, 200);
+}
+
 canvas.addEventListener('click', (e) => {
     if (!gameRunning) return;
     const rect = canvas.getBoundingClientRect();
@@ -183,10 +230,44 @@ canvas.addEventListener('click', (e) => {
         const dist = Math.sqrt((clickX - mouse.x) ** 2 + (clickY - mouse.y) ** 2);
         if (dist < MOUSE_RADIUS) {
             score++;
-            scoreElement.textContent = score;
+            updateScore();
             if (score >= TARGET_SCORES[level - 1]) {
                 if (level < 5) {
                     level++;
+                    score = 0; // Reset score when advancing to next level
+                    updateScore(); // Update the score display
+                    clearInterval(spawnTimer);
+                    initHoles();
+                    spawnTimer = setInterval(spawnMouse, LEVEL_CONFIG[level - 1].spawnInterval);
+                } else {
+                    showWinScreen();
+                }
+            }
+            return false;
+        }
+        return true;
+    });
+});
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (!gameRunning) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+
+    mice = mice.filter(mouse => {
+        const dist = Math.sqrt((touchX - mouse.x) ** 2 + (touchY - mouse.y) ** 2);
+        if (dist < MOUSE_RADIUS) {
+            score++;
+            updateScore();
+            if (score >= TARGET_SCORES[level - 1]) {
+                if (level < 5) {
+                    level++;
+                    score = 0;
+                    updateScore();
                     clearInterval(spawnTimer);
                     initHoles();
                     spawnTimer = setInterval(spawnMouse, LEVEL_CONFIG[level - 1].spawnInterval);
@@ -202,3 +283,15 @@ canvas.addEventListener('click', (e) => {
 
 startButton.addEventListener('click', startGame);
 restartButton.addEventListener('click', resetGame);
+
+window.addEventListener('resize', () => {
+    if (gameRunning) {
+        initCanvas();
+        initHoles();
+    }
+});
+
+// Initialize the game time controls
+updateSelectedTime(0); // This will set up initial button states
+decreaseTimeBtn.addEventListener('click', () => updateSelectedTime(-30));
+increaseTimeBtn.addEventListener('click', () => updateSelectedTime(30));
